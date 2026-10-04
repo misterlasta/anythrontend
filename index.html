@@ -105,12 +105,12 @@
     <div id="sellModal" class="modal" hidden>
       <div class="modal-card modal-wide">
         <h3>Панель предпринимателя — новый лот</h3>
-        <input id="sellTitle" placeholder="Название проекта">
+        <input id="sellTitle" placeholder="Название проекта" maxlength="80">
         <div class="modal-row">
-          <input id="sellLogo" placeholder="Логотип: ссылка на картинку или 1-2 буквы">
-          <input id="sellLoc" placeholder="Локация, например: Москва / онлайн">
+          <input id="sellLogo" placeholder="Логотип: ссылка на картинку или 1-2 буквы" maxlength="300">
+          <input id="sellLoc" placeholder="Локация, например: Москва / онлайн" maxlength="60">
         </div>
-        <textarea id="sellDesc" placeholder="Идея / описание: что за проект, куда пойдут средства"></textarea>
+        <textarea id="sellDesc" placeholder="Идея / описание: что за проект, куда пойдут средства" maxlength="2000"></textarea>
         <div class="modal-row">
           <select id="sellStage">
             <option value="idea">Стадия: идея</option>
@@ -123,8 +123,8 @@
           </select>
         </div>
         <div class="modal-row">
-          <input id="sellGoal" type="number" min="0.1" step="0.1" placeholder="Нужно всего, TON">
-          <input id="sellPrice" type="number" min="0.01" step="0.01" placeholder="Цена 1 акции, TON">
+          <input id="sellGoal" type="number" min="0.1" max="1000000000" step="0.1" placeholder="Нужно всего, TON">
+          <input id="sellPrice" type="number" min="0.01" max="1000000" step="0.01" placeholder="Цена 1 акции, TON">
         </div>
         <div id="aiPreview" class="ai-verdict" hidden></div>
         <div class="modal-row">
@@ -145,6 +145,13 @@
     </div>
   </main>
 
+  <div id="tgOnly" class="tg-only" hidden>
+    <div class="tg-only-card">
+      <div class="tg-only-logo">✈</div>
+      <h2>Только в Telegram</h2>
+      <p>Маркет Capiton работает внутри Telegram Mini App.<br>Открой эту ссылку с телефона в Telegram через бота проекта.</p>
+    </div>
+  </div>
   <div id="toast"></div>
   <script src="app.js"></script>
 </body>

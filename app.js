@@ -16,7 +16,13 @@ const inTG = !!tg?.initData;
 function log(msg) {
   if (!logBox) return;
   const time = new Date().toLocaleTimeString();
-  logBox.innerHTML += `<div><span class="t">[${time}]</span> ${msg}</div>`;
+  const div = document.createElement('div');
+  const t = document.createElement('span');
+  t.className = 't';
+  t.textContent = '[' + time + '] ';
+  div.appendChild(t);
+  div.appendChild(document.createTextNode(String(msg)));
+  logBox.appendChild(div);
   logBox.scrollTop = logBox.scrollHeight;
 }
 function setStatus(text, cls = '') {
@@ -115,8 +121,10 @@ function initTelegram() {
     const badge = $('#tg-user');
     if (u && badge) {
       badge.hidden = false;
-      badge.innerHTML = `👋 <b>${u.first_name || ''}${u.last_name ? ' ' + u.last_name : ''}</b>` +
-        (u.username ? ` <span>@${u.username}</span>` : '') + ` <span>· Mini App</span>`;
+      const safeName = esc([u.first_name, u.last_name].filter(Boolean).join(' ')) || 'друг';
+      const safeNick = u.username ? esc(String(u.username).replace(/^@/, '')) : '';
+      badge.innerHTML = `👋 <b>${safeName}</b>` +
+        (safeNick ? ` <span>@${safeNick}</span>` : '') + ` <span>· Mini App</span>`;
     }
     if (inTG) document.body.classList.add('in-tg');
     log(inTG ? 'Telegram Mini App: авторизован' : 'Telegram WebView (тест, без initData)');
@@ -164,16 +172,53 @@ const LOTS = [
   { id: 'uzv', title: 'Ферма · пример лота', desc: 'Один из примеров, не основной проект.', price: '1 TON', nano: '1000000000', tag: 'пример', grad: 'linear-gradient(135deg,#10b981,#84cc16)', logo: 'Ф', stage: 'idea', format: 'offline', loc: 'Мурманск', goal: '500 TON', verified: false },
   { id: 'lot4', title: 'Лот 04 · пример', desc: 'Пример инвестиционного лота для витрины.', price: '0.3 TON', nano: '300000000', tag: 'пример', grad: 'linear-gradient(135deg,#f59e0b,#ef4444)', logo: 'C4', stage: 'live', format: 'hybrid', loc: 'Онлайн', goal: '30 TON', verified: true },
 ];
-function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function logoHtml(lot, cls) {
-  const lg = (lot.logo || (lot.title || '?').slice(0, 1)).trim();
-  if (/^https?:\/\//i.test(lg)) return `<span class="${cls}"><img src="${esc(lg)}" alt=""></span>`;
+  const lg = String(lot.logo || (lot.title || '?').slice(0, 1)).trim().slice(0, 300);
+  if (/^https:\/\/[^\s"'<>]{1,300}$/i.test(lg)) return `<span class="${cls}"><img src="${esc(lg)}" alt="" loading="lazy"></span>`;
   return `<span class="${cls}">${esc(lg.slice(0, 2))}</span>`;
+}
+const GRAD_FALLBACK = 'linear-gradient(135deg,#1a73e8,#7c5cff)';
+function cleanGrad(g) {
+  const s = String(g || '').trim();
+  if (/^linear-gradient\(\s*\d+deg\s*(,\s*#[0-9a-f]{3,8}){2,4}\s*\)$/i.test(s)) return s;
+  return GRAD_FALLBACK;
+}
+function sanitizeLot(c) {
+  if (!c || typeof c !== 'object') return null;
+  const id = String(c.id || '').slice(0, 64);
+  const title = String(c.title || '').slice(0, 80);
+  if (!id || !title) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) return null;
+  return {
+    id, title,
+    desc: String(c.desc || '').slice(0, 500),
+    price: String(c.price || '').slice(0, 24),
+    nano: /^\d{1,20}$/.test(String(c.nano || '')) ? String(c.nano) : '1000000000',
+    tag: String(c.tag || 'лот').slice(0, 24),
+    grad: cleanGrad(c.grad),
+    mine: true,
+    logo: String(c.logo || title.slice(0, 1)).slice(0, 300),
+    stage: c.stage === 'live' ? 'live' : 'idea',
+    format: ['online', 'offline', 'hybrid'].includes(c.format) ? c.format : 'online',
+    loc: String(c.loc || 'Онлайн').slice(0, 60),
+    goal: String(c.goal || '').slice(0, 24),
+    verified: !!c.verified,
+    pending: c.pending === true,
+  };
 }
 function vBadge(lot) { return lot.verified ? '<span class="vbadge" title="Верифицирован">✓</span>' : ''; }
 function stageName(s) { return s === 'live' ? 'существует' : 'идея'; }
+const HOMO = { a: 'а', e: 'е', o: 'о', p: 'р', c: 'с', x: 'х', y: 'у', m: 'м', k: 'к', t: 'т', b: 'в', h: 'н', n: 'п', '0': 'о', 'і': 'и', 'ї': 'и', 'є': 'е' };
 function normText(s) {
-  return String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[\u200b-\u200f]/g, '').replace(/\s+/g, ' ').trim();
+  return String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[\u200b-\u200f]/g, '').replace(/[aeopcxymktbhn0ієї]/g, (ch) => HOMO[ch] || ch).replace(/\s+/g, ' ').trim();
+}
+const TRANS_COMBO = [['shch', 'щ'], ['sch', 'щ'], ['zh', 'ж'], ['kh', 'х'], ['ch', 'ч'], ['ts', 'ц'], ['tz', 'ц'], ['yu', 'ю'], ['ya', 'я'], ['yo', 'ё'], ['ye', 'е'], ['yi', 'и']];
+const TRANS_SINGLE = { a: 'а', b: 'б', c: 'с', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'х', i: 'и', j: 'й', k: 'к', l: 'л', m: 'м', n: 'н', o: 'о', p: 'п', r: 'р', s: 'с', t: 'т', u: 'у', v: 'в', x: 'х', y: 'й', z: 'з', w: 'в' };
+function translitText(s) {
+  let t = String(s || '').toLowerCase();
+  for (const [lat, cy] of TRANS_COMBO) t = t.split(lat).join(cy);
+  return t.replace(/ё/g, 'е').replace(/[\u200b-\u200f]/g, '').replace(/[a-z]/g, (ch) => TRANS_SINGLE[ch] || ch).replace(/\s+/g, ' ').trim();
 }
 function hasWord(text, words) {
   const found = [];
@@ -189,6 +234,9 @@ function aiModerate(lot, all) {
   const title = String(lot.title || '').trim();
   const desc = String(lot.desc || '').trim();
   const text = normText(title + ' ' + desc);
+  const textT = translitText(title + ' ' + desc);
+  const rawText = String(title + ' ' + desc).toLowerCase().replace(/[\u200b-\u200f]/g, '').replace(/\s+/g, ' ').trim();
+  const viaMapping = (hits) => hits.length > 0 && /[a-z]/i.test(rawText) && hits.some(h => !rawText.includes(h));
   const priceNum = parseFloat(lot.price) || 0;
   const goalNum = parseFloat(lot.goal) || 0;
   let score = 100;
@@ -220,23 +268,42 @@ function aiModerate(lot, all) {
       score -= 45;
     }
   }
-  const matRoots = ['хуй', 'хуе', 'хую', 'хуя', 'пизд', 'пезд', 'ебан', 'ебат', 'ебал', 'ебет', 'ебу', 'еби', 'бляд', 'блях', 'сука', 'суки', 'сучк', 'залуп', 'говн', 'сран', 'дроч', 'пидор', 'педик', 'херня', 'херню', 'хером'];
-  const matHits = [...new Set(matRoots.filter(w => text.includes(w)))];
+  const matRoots = ['хуй', 'хуе', 'хую', 'хуя', 'пизд', 'пезд', 'ебан', 'ебат', 'ебал', 'ебет', 'ебу', 'еби', 'еблан', 'бляд', 'блях', 'сука', 'суки', 'сучк', 'залуп', 'говн', 'сран', 'дроч', 'пидор', 'педик', 'херня', 'херню', 'хером', 'чмо', 'уеб', 'долбоеб', 'мудак', 'мудил', 'гандон', 'мразь'];
+  const matOn = (t) => matRoots.filter(w => t.includes(w));
+  const matHits = [...new Set([...matOn(text), ...matOn(textT)])];
   if (matHits.length) {
     severe++;
     critical.push('мат: ' + matHits.slice(0, 4).join(', '));
     score -= 35;
     if (matHits.length >= 3) { severe++; score -= 25; }
+    if (viaMapping(matHits)) { severe++; critical.push('обход фильтра латиницей'); score -= 25; }
   }
   const slurSub = ['гомик', 'пидор', 'пидорас', 'нигер', 'ниггер', 'чурк', 'черножоп'];
-  const slurWord = ['хохол', 'жид', 'жиды', 'хач', 'даун'];
-  const slurHits = [...new Set([...slurSub.filter(w => text.includes(w)), ...hasWord(text, slurWord)])];
+  const slurFlex = [
+    { stem: 'хохл', except: ['хохлома'] },
+    { stem: 'жид', except: ['жидкост'] },
+    { stem: 'хач', except: ['хачапури'] },
+    { stem: 'даун', except: ['дауншифтинг', 'синдром'] },
+  ];
+  const flexHit = (s) => {
+    const hits = [];
+    for (const f of slurFlex) {
+      if (f.except.some(x => s.includes(x))) continue;
+      let m = null;
+      try { m = s.match(new RegExp('(^|[^a-zа-яё0-9])' + f.stem + '[а-яё]*', 'i')); }
+      catch (_) { m = null; }
+      if (m) hits.push(m[0].replace(/^[^a-zа-яё]+/i, ''));
+    }
+    return hits;
+  };
+  const slurHits = [...new Set([...slurSub.filter(w => text.includes(w)), ...flexHit(text), ...slurSub.filter(w => textT.includes(w)), ...flexHit(textT)])];
   if (slurHits.length) {
     severe++;
     critical.push('оскорбление группы: ' + slurHits.slice(0, 3).join(', '));
     score -= 40;
+    if (viaMapping(slurHits)) { severe++; critical.push('обход фильтра латиницей'); score -= 25; }
     const dehuman = ['разведение', 'корм', 'скот', 'загон', 'стойл', 'убой', 'истреб', 'уничтож', 'убей', 'убейте', 'убить', 'сдохни'];
-    const slurIn = (s) => slurSub.some(w => s.includes(w)) || hasWord(s, slurWord).length > 0;
+    const slurIn = (s) => slurSub.some(w => s.includes(w)) || flexHit(s).length > 0;
     const sameSentence = text.split(/[.!?;\n]+/).some(s => slurIn(s) && dehuman.some(w => s.includes(w)));
     if (sameSentence) { severe++; critical.push('дегуманизация / призыв'); score -= 30; }
   }
@@ -345,7 +412,7 @@ function aiHtml(m) {
 }
 try {
   const custom = JSON.parse(localStorage.getItem('capiton_lots') || '[]');
-  if (Array.isArray(custom)) LOTS.push(...custom.filter(c => c && c.id && c.title));
+  if (Array.isArray(custom)) for (const c of custom) { const s = sanitizeLot(c); if (s) LOTS.push(s); }
 } catch (_) {}
 let selectedLot = LOTS[0];
 let lotFilter = '';
@@ -373,11 +440,37 @@ function defaultTrust(id) {
     ],
   };
 }
+function sanitizeTrust(t) {
+  const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
+  if (!t || typeof t !== 'object') return defaultTrust('x');
+  const ms = Array.isArray(t.milestones) && t.milestones.length ? t.milestones : defaultTrust('x').milestones;
+  return {
+    escrow: true,
+    milestones: ms.slice(0, 8).map((m, i) => ({
+      title: String((m && m.title) || 'Этап ' + (i + 1)).slice(0, 80),
+      pct: Math.max(0, Math.min(100, num(m && m.pct, 0))),
+      released: !!(m && m.released),
+      yes: Math.max(0, Math.min(1e6, Math.floor(num(m && m.yes, 0)))),
+      no: Math.max(0, Math.min(1e6, Math.floor(num(m && m.no, 0)))),
+    })),
+    multisig: {
+      entrepreneur: true,
+      platform: !!(t.multisig && t.multisig.platform),
+      auditor: !!(t.multisig && t.multisig.auditor),
+    },
+    invoices: (Array.isArray(t.invoices) ? t.invoices : []).slice(0, 12).map((inv, i) => ({
+      id: String((inv && inv.id) || ('inv' + i)).slice(0, 64),
+      title: String((inv && inv.title) || 'Счёт').slice(0, 80),
+      amount: String((inv && inv.amount) || '').slice(0, 24),
+      paid: !!(inv && inv.paid),
+    })),
+  };
+}
 function getTrust(lot) {
   try {
     const all = JSON.parse(localStorage.getItem('capiton_trust') || '{}');
     if (all[lot.id]) {
-      lot._trust = all[lot.id];
+      lot._trust = sanitizeTrust(all[lot.id]);
       return lot._trust;
     }
   } catch (_) {}
@@ -395,13 +488,32 @@ function multisigCount(t) {
   const m = t.multisig;
   return (m.entrepreneur ? 1 : 0) + (m.platform ? 1 : 0) + (m.auditor ? 1 : 0);
 }
+function voterId() {
+  const tgId = currentTgId();
+  if (tgId != null) return 'tg:' + tgId;
+  try {
+    let anon = localStorage.getItem('capiton_voter');
+    if (!anon || !/^anon:[a-z0-9]+$/i.test(anon)) {
+      anon = 'anon:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('capiton_voter', anon);
+    }
+    return anon;
+  } catch (_) { return 'anon:session'; }
+}
+function myVote(lotId, mi) {
+  try { return localStorage.getItem('capiton_voted:' + voterId() + '|' + lotId + ':' + mi) || null; }
+  catch (_) { return null; }
+}
 function voteTranche(lotId, mi, yes) {
   const lot = LOTS.find(l => l.id === lotId);
   if (!lot) return;
   const t = getTrust(lot);
   const m = t.milestones[mi];
   if (!m || m.released) return;
+  const prev = myVote(lotId, mi);
+  if (prev) { toast(prev === 'yes' ? 'Ты уже голосовал «За» по этому этапу' : 'Ты уже голосовал «Против» по этому этапу', 'warning'); return; }
   if (yes) m.yes++; else m.no++;
+  try { localStorage.setItem('capiton_voted:' + voterId() + '|' + lotId + ':' + mi, yes ? 'yes' : 'no'); } catch (_) {}
   const total = m.yes + m.no;
   if (total >= 3 && m.yes / total > 0.51 && multisigCount(t) >= 2) {
     m.released = true;
@@ -464,16 +576,16 @@ function renderLots() {
   if (!grid) return;
   const vis = getVisibleLots();
   grid.innerHTML = vis.map(l => `
-    <div class="lot ${selectedLot && selectedLot.id === l.id ? 'selected' : ''}" data-id="${l.id}">
-      <div class="lot-cover" style="background:${l.grad}"><span>${esc(l.tag || 'лот')} · ${esc(l.price)}</span></div>
+    <div class="lot ${selectedLot && selectedLot.id === l.id ? 'selected' : ''}" data-id="${esc(l.id)}">
+      <div class="lot-cover" style="background:${cleanGrad(l.grad)}"><span>${esc(l.tag || 'лот')} · ${esc(l.price)}</span></div>
       <div class="lot-body">
         <div class="lot-top">${logoHtml(l, 'lot-logo')}<h3>${esc(l.title)}${vBadge(l)}</h3></div>
         <p>${esc(l.desc)}</p>
         <div class="lot-foot">
           <span class="lot-price">${esc(l.price)}</span>
-          <button class="lot-buy" data-buy="${l.id}">Купить</button>
+          <button class="lot-buy" data-buy="${esc(l.id)}">Купить</button>
         </div>
-        ${l.mine && !l.verified ? `<button class="lot-del" data-del="${l.id}">удалить</button>` : ''}
+        ${l.mine && !l.verified ? `<button class="lot-del" data-del="${esc(l.id)}">удалить</button>` : ''}
       </div>
     </div>`).join('') || '<p>Лотов пока нет.</p>';
 }
@@ -522,22 +634,26 @@ function renderTrust() {
         <b>${esc(m.title)} · ${m.pct}% ${m.released ? '· выдано' : '· в сейфе'}</b>
         <div class="vote-bar"><i style="width:${pctYes}%"></i></div>
         <div class="ms-sub">За ${m.yes} / против ${m.no} · нужно &gt;51% держателей</div>
-        ${m.released ? '' : `<div class="admin-row">
-          <button class="abtn ok" data-vote-yes="${selectedLot.id}:${i}">За транш</button>
-          <button class="abtn no" data-vote-no="${selectedLot.id}:${i}">Против</button>
-        </div>`}
+        ${m.released ? '' : (() => {
+          const v = myVote(selectedLot.id, i);
+          if (v) return `<div class="ms-sub">Твой голос: ${v === 'yes' ? 'За ✓' : 'Против'} · один голос с человека</div>`;
+          return `<div class="admin-row">
+            <button class="abtn ok" data-vote-yes="${esc(selectedLot.id)}:${i}">За транш</button>
+            <button class="abtn no" data-vote-no="${esc(selectedLot.id)}:${i}">Против</button>
+          </div>`;
+        })()}
       </div>`;
     }).join('')}
     <div class="trust-head">Мультисиг 2/3 · подписей: ${s.keys}</div>
     <div class="mskeys">${key('Предприниматель', ms.entrepreneur)}${key('Платформа', ms.platform)}${key('Аудитор', ms.auditor)}</div>
     <div class="admin-row">
-      <button class="abtn dim" data-ms="platform:${selectedLot.id}">Платформа: подписать</button>
-      <button class="abtn dim" data-ms="auditor:${selectedLot.id}">Аудитор: подписать</button>
+      <button class="abtn dim" data-ms="platform:${esc(selectedLot.id)}">Платформа: подписать</button>
+      <button class="abtn dim" data-ms="auditor:${esc(selectedLot.id)}">Аудитор: подписать</button>
     </div>
     <div class="trust-head">Оплата подрядчикам напрямую</div>
     ${t.invoices.map(inv => `<div class="ms-item"><b>${esc(inv.title)} · ${esc(inv.amount)}</b>
       <div class="ms-sub">${inv.paid ? 'оплачено со счёта платформы' : 'ждёт разблокированного транша + 2 подписей'}</div>
-      ${inv.paid ? '' : `<button class="abtn ok" data-pay="${selectedLot.id}:${inv.id}">Оплатить счёт</button>`}
+      ${inv.paid ? '' : `<button class="abtn ok" data-pay="${esc(selectedLot.id)}:${esc(inv.id)}">Оплатить счёт</button>`}
     </div>`).join('')}`;
 }
 async function onInvest(forcedId) {
@@ -593,9 +709,9 @@ function renderAdmin() {
       <p>Эскроу: выдано ${ts.releasedPct}% · подписей ${ts.keys}/3</p>
       ${aiHtml(m)}
       <div class="admin-row">
-        ${!l.verified ? `<button class="abtn ok" data-verify="${l.id}">✓ Верифицировать</button>` : `<button class="abtn dim" data-unverify="${l.id}">Снять галочку</button>`}
-        ${l.pending ? `<button class="abtn ok" data-approve="${l.id}">Опубликовать</button>` : ''}
-        <button class="abtn no" data-adel="${l.id}">Удалить</button>
+        ${!l.verified ? `<button class="abtn ok" data-verify="${esc(l.id)}">✓ Верифицировать</button>` : `<button class="abtn dim" data-unverify="${esc(l.id)}">Снять галочку</button>`}
+        ${l.pending ? `<button class="abtn ok" data-approve="${esc(l.id)}">Опубликовать</button>` : ''}
+        <button class="abtn no" data-adel="${esc(l.id)}">Удалить</button>
       </div>
     </div>`;
   }).join('');
@@ -682,13 +798,14 @@ $('#sellModal')?.addEventListener('click', (e) => { if (e.target.id === 'sellMod
 $('#adminClose')?.addEventListener('click', () => { $('#adminModal').hidden = true; });
 $('#adminModal')?.addEventListener('click', (e) => { if (e.target.id === 'adminModal') e.target.hidden = true; });
 function readSellForm() {
+  const pick = (v, list, fb) => list.includes(v) ? v : fb;
   return {
-    title: $('#sellTitle').value.trim(),
-    logo: $('#sellLogo').value.trim(),
-    loc: $('#sellLoc').value.trim(),
-    desc: $('#sellDesc').value.trim(),
-    stage: $('#sellStage').value,
-    format: $('#sellFormat').value,
+    title: $('#sellTitle').value.trim().slice(0, 80),
+    logo: $('#sellLogo').value.trim().slice(0, 300),
+    loc: $('#sellLoc').value.trim().slice(0, 60),
+    desc: $('#sellDesc').value.trim().slice(0, 2000),
+    stage: pick($('#sellStage').value, ['idea', 'live'], 'idea'),
+    format: pick($('#sellFormat').value, ['online', 'offline', 'hybrid'], 'online'),
     goalNum: parseFloat($('#sellGoal').value),
     priceNum: parseFloat($('#sellPrice').value),
   };
@@ -707,6 +824,8 @@ function readSellForm() {
 $('#sellSubmit')?.addEventListener('click', () => {
   const f = readSellForm();
   if (!f.title || !(f.priceNum > 0)) { toast('Заполни название и цену акции'); return; }
+  if (!Number.isFinite(f.priceNum) || f.priceNum > 1000000) { toast('Цена акции нереальна (максимум 1 000 000 TON)'); return; }
+  if (Number.isFinite(f.goalNum) && f.goalNum > 1000000000) { toast('Цель нереальна (максимум 1 000 000 000 TON)'); return; }
   if (!f.desc || f.desc.length < 20) { toast('Опиши идею подробнее (от 20 символов)'); return; }
   const nano = String(Math.round(f.priceNum * 1e9));
   const lot = { id: 'my' + Date.now(), title: f.title, desc: f.desc, price: f.priceNum + ' TON', nano, tag: f.stage === 'live' ? 'работает' : 'идея', grad: GRADS[LOTS.length % GRADS.length], mine: true, logo: f.logo || f.title.slice(0, 1), stage: f.stage, format: f.format, loc: f.loc || 'Онлайн', goal: (f.goalNum > 0 ? f.goalNum : f.priceNum) + ' TON', verified: false, pending: true };
@@ -805,6 +924,11 @@ document.querySelector('#themeToggle')?.addEventListener('click', () => {
   applyTGTheme();
 });
 initTelegram();
+if (!inTG) {
+  const gate = $('#tgOnly');
+  if (gate) gate.hidden = false;
+  document.body.classList.add('locked');
+}
 refreshAdminVisibility();
 syncMainButton();
 $('#year').textContent = new Date().getFullYear();

@@ -259,6 +259,13 @@ a{color:var(--theme-surface-on-surface-variant);text-decoration:none}
   .chip{font-size:13px;padding:7px 12px}
 }
 
+.tg-only{position:fixed;inset:0;z-index:500;background:#121317;display:flex;align-items:center;justify-content:center;padding:24px}
+.tg-only[hidden]{display:none}
+.tg-only-card{background:#1b1e26;border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:40px 32px;max-width:380px;text-align:center;color:#f2f4f8}
+.tg-only-logo{font-size:44px;margin-bottom:12px}
+.tg-only-card h2{margin:0 0 10px;font-size:24px}
+.tg-only-card p{margin:0;font-size:14px;line-height:1.6;color:#a7b0c2}
+body.locked{overflow:hidden}
 .theme-btn{border:1px solid var(--theme-outline-variant);background:var(--theme-surface-container);border-radius:999px;width:38px;height:38px;font-size:17px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;font-family:var(--font)}
 html[data-theme="dark"]{
   --palette-grey-0:#121317;
