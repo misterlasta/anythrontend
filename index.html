@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Инвест-платформа</title>
+    <!-- Скрипт интеграции с Telegram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Скрипт кнопки подключения TON -->
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #000); padding: 20px; }
+        .card { border: 1px solid #ccc; border-radius: 10px; padding: 15px; margin-top: 20px; background: var(--tg-theme-secondary-bg-color, #f4f4f5); }
+        button { background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #fff); border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 15px;}
+    </style>
+</head>
+<body>
+    <!-- Место, где появится кнопка TonConnect -->
+    <div id="ton-connect"></div>
+    
+    <div class="card">
+        <h2>🐟 УЗВ-ферма для лосося (Мурманск)</h2>
+        <p>Строительство автономного комплекса и морских садков. Официальный сбор средств.</p>
+        <p><b>Стоимость доли:</b> 1 TON</p>
+        <button id="investBtn">Инвестировать 1 TON</button>
+    </div>
+
+    <script>
+        // Сообщаем Telegram, что приложение открыто
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Инициализация TON Connect
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://misterlasta.github.io/anythrontend/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect'
+        });
+
+        // Логика при нажатии на кнопку Инвестировать
+        document.getElementById('investBtn').onclick = async () => {
+            if (!tonConnectUI.connected) {
+                tg.showAlert("Сначала подключи криптокошелек сверху!");
+                return;
+            }
+            
+            // Параметры транзакции
+            const transaction = {
+                validUntil: Math.floor(Date.now() / 1000) + 60, // 60 секунд на подтверждение
+                messages: [
+                    {
+                        address: "Capiton", // UQDYkZiN7Y_U4v15tTcyYrRv1NChxIuQg1vuoa-aOY-BKX8-
+                        amount: "1000000000" // 1 TON = 1 000 000 000 наноТон
+                    }
+                ]
+            };
+
+            try {
+                // Отправляем запрос в кошелек пользователя
+                await tonConnectUI.sendTransaction(transaction);
+                tg.showAlert("Транзакция успешна! Вы стали совладельцем проекта.");
+            } catch (e) {
+                tg.showAlert("Транзакция отменена.");
+            }
+        };
+    </script>
+</body>
+</html>
