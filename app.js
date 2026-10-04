@@ -228,6 +228,18 @@ function aiModerate(lot, all) {
     score -= 35;
     if (matHits.length >= 3) { severe++; score -= 25; }
   }
+  const slurSub = ['гомик', 'пидор', 'пидорас', 'нигер', 'ниггер', 'чурк', 'черножоп'];
+  const slurWord = ['хохол', 'жид', 'жиды', 'хач', 'даун'];
+  const slurHits = [...new Set([...slurSub.filter(w => text.includes(w)), ...hasWord(text, slurWord)])];
+  if (slurHits.length) {
+    severe++;
+    critical.push('оскорбление группы: ' + slurHits.slice(0, 3).join(', '));
+    score -= 40;
+    const dehuman = ['разведение', 'корм', 'скот', 'загон', 'стойл', 'убой', 'истреб', 'уничтож', 'убей', 'убейте', 'убить', 'сдохни'];
+    const slurIn = (s) => slurSub.some(w => s.includes(w)) || hasWord(s, slurWord).length > 0;
+    const sameSentence = text.split(/[.!?;\n]+/).some(s => slurIn(s) && dehuman.some(w => s.includes(w)));
+    if (sameSentence) { severe++; critical.push('дегуманизация / призыв'); score -= 30; }
+  }
   const profitMatch = text.match(/(\d{2,4})\s*%\s*(в\s*(день|сутки|неделю)|годовых|месяц)/);
   if (profitMatch) {
     const pct = parseInt(profitMatch[1], 10);
@@ -317,6 +329,7 @@ function aiModerate(lot, all) {
   if (!lot.loc) fix.push('укажи город или «онлайн»');
   if (warnings.some(w => w.startsWith('доход'))) fix.push('убери % доходности или приложи отчётность');
   if (critical.some(c => c.startsWith('мат'))) fix.push('убери нецензурные слова из названия и описания');
+  if (critical.some(c => c.startsWith('оскорбление'))) fix.push('убери оскорбления групп — такое не публикуем');
   return { score, verdict, critical, warnings, tips, fix, reasons: [...critical, ...warnings, ...tips] };
 }
 function aiHtml(m) {
