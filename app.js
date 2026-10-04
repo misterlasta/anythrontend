@@ -467,7 +467,9 @@ function sanitizeTrust(t) {
   };
 }
 function getTrust(lot) {
-  try {
+  if (lot._trust && Array.isArray(lot._trust.milestones) && lot._trust.milestones.length) {
+    return lot._trust = sanitizeTrust(lot._trust); // attached from API
+  }  try {
     const all = JSON.parse(localStorage.getItem('capiton_trust') || '{}');
     if (all[lot.id]) {
       lot._trust = sanitizeTrust(all[lot.id]);
@@ -504,9 +506,26 @@ function myVote(lotId, mi) {
   try { return localStorage.getItem('capiton_voted:' + voterId() + '|' + lotId + ':' + mi) || null; }
   catch (_) { return null; }
 }
-function voteTranche(lotId, mi, yes) {
+async function voteTranche(lotId, mi, yes) {
   const lot = LOTS.find(l => l.id === lotId);
   if (!lot) return;
+  // Backend first (enforces one-vote-per-user in DB)
+  if (window.Backend) {
+    try {
+      const res = await window.Backend.vote(lotId, mi, yes ? 'yes' : 'no');
+      const t0 = getTrust(lot);
+      const m0 = t0.milestones[mi];
+      if (m0 && res) { m0.yes = res.yes; m0.no = res.no; }
+      saveTrust(lot);
+      renderTrust();
+      renderAdmin();
+      toast('Голос учтён', 'success');
+      return;
+    } catch (e) {
+      if (/409|Already voted|уже голосовал/i.test(e.message)) { toast('Ты уже голосовал по этому этапу', 'warning'); return; }
+      log('vote API fallback: ' + e.message);
+    }
+  }
   const t = getTrust(lot);
   const m = t.milestones[mi];
   if (!m || m.released) return;
@@ -526,8 +545,11 @@ function voteTranche(lotId, mi, yes) {
   renderTrust();
   renderAdmin();
 }
-function msApprove(lotId, role) {
+async function msApprove(lotId, role) {
   if (role !== 'entrepreneur' && !needAdmin()) return;
+  if (window.Backend && (role === 'platform' || role === 'auditor')) {
+    try { await window.Backend.multisig(lotId, role); } catch (e) { log('multisig API: ' + e.message); }
+  }
   const lot = LOTS.find(l => l.id === lotId);
   if (!lot) return;
   const t = getTrust(lot);
@@ -538,8 +560,11 @@ function msApprove(lotId, role) {
   renderAdmin();
   haptic('light');
 }
-function payInvoice(lotId, invId) {
+async function payInvoice(lotId, invId) {
   if (!needAdmin()) return;
+  if (window.Backend) {
+    try { await window.Backend.payInvoice(invId); } catch (e) { log('pay API: ' + e.message); }
+  }
   const lot = LOTS.find(l => l.id === lotId);
   if (!lot) return;
   const t = getTrust(lot);
@@ -683,6 +708,7 @@ async function onInvest(forcedId) {
     setStatus('Ожидание подписи в кошельке…', '');
     log('sendTransaction ' + lot.id + ' ' + lot.price + ' → ' + CONFIG.recipient);
     await tonConnectUI.sendTransaction(transaction);
+    try { await window.Backend?.invest(lot.id, 'ton-tx-' + Date.now()); } catch (e) { log('invest API: ' + e.message); }
     setStatus('Готово! Лот "' + lot.title + '" твой.', 'ok');
     toast('Готово! Лот "' + lot.title + '" твой.', 'success');
     log('tx success');
@@ -716,11 +742,13 @@ function renderAdmin() {
     </div>`;
   }).join('');
 }
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const verify = e.target.closest?.('[data-verify]');
   if (verify) {
     if (!needAdmin()) return;
-    const l = LOTS.find(x => x.id === verify.dataset.verify);
+    const id = verify.dataset.verify;
+    try { await window.Backend?.verify(id); } catch (err) { log('verify API: ' + err.message); }
+    const l = LOTS.find(x => x.id === id);
     if (l) { l.verified = true; l.pending = false; persistCustom(); renderLots(); renderAdmin(); selectLot(l.id); toast('Лот верифицирован'); }
     return;
   }
@@ -734,7 +762,9 @@ document.addEventListener('click', (e) => {
   const approve = e.target.closest?.('[data-approve]');
   if (approve) {
     if (!needAdmin()) return;
-    const l = LOTS.find(x => x.id === approve.dataset.approve);
+    const aid = approve.dataset.approve;
+    try { await window.Backend?.approve(aid); } catch (err) { log('approve API: ' + err.message); }
+    const l = LOTS.find(x => x.id === aid);
     if (l) {
       const m = aiModerate(l);
       l.pending = false;
@@ -748,6 +778,7 @@ document.addEventListener('click', (e) => {
   if (adel) {
     if (!needAdmin()) return;
     const id = adel.dataset.adel;
+    try { await window.Backend?.remove(id); } catch (err) { log('delete API: ' + err.message); }
     const i = LOTS.findIndex(l => l.id === id);
     if (i > -1) LOTS.splice(i, 1);
     persistCustom();
@@ -821,7 +852,7 @@ function readSellForm() {
     box.outerHTML = aiHtml(aiModerate(draft)).replace('class="ai-verdict', 'id="aiPreview" class="ai-verdict');
   });
 });
-$('#sellSubmit')?.addEventListener('click', () => {
+$('#sellSubmit')?.addEventListener('click', async () => {
   const f = readSellForm();
   if (!f.title || !(f.priceNum > 0)) { toast('Заполни название и цену акции'); return; }
   if (!Number.isFinite(f.priceNum) || f.priceNum > 1000000) { toast('Цена акции нереальна (максимум 1 000 000 TON)'); return; }
@@ -830,14 +861,18 @@ $('#sellSubmit')?.addEventListener('click', () => {
   const nano = String(Math.round(f.priceNum * 1e9));
   const lot = { id: 'my' + Date.now(), title: f.title, desc: f.desc, price: f.priceNum + ' TON', nano, tag: f.stage === 'live' ? 'работает' : 'идея', grad: GRADS[LOTS.length % GRADS.length], mine: true, logo: f.logo || f.title.slice(0, 1), stage: f.stage, format: f.format, loc: f.loc || 'Онлайн', goal: (f.goalNum > 0 ? f.goalNum : f.priceNum) + ' TON', verified: false, pending: true };
   const m = aiModerate(lot);
-  if (m.verdict === 'reject') {
-    const box = $('#aiPreview');
+  if (m.verdict === 'reject') {    const box = $('#aiPreview');
     if (box) { box.hidden = false; box.outerHTML = aiHtml(m).replace('class="ai-verdict', 'id="aiPreview" class="ai-verdict'); }
     toast('AI-модер отклонил: ' + (m.reasons[0] || 'высокий риск'), 'error');
     return;
   }
-  LOTS.unshift(lot);
-  saveCustom(lot);
+  if (window.Backend) {
+    try {
+      const created = await window.Backend.createLot(lot);
+      const s = sanitizeLot(created);
+      if (s) { LOTS.unshift(s); if (created._trust) s._trust = sanitizeTrust(created._trust); }
+    } catch (e) { LOTS.unshift(lot); saveCustom(lot); log('create API fallback: ' + e.message); }
+  } else { LOTS.unshift(lot); saveCustom(lot); }
   $('#sellModal').hidden = true;
   ['sellTitle', 'sellLogo', 'sellLoc', 'sellDesc', 'sellGoal', 'sellPrice'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   renderAdmin();
@@ -849,8 +884,41 @@ $('#copyAddr')?.addEventListener('click', async () => {
   catch (_) { toast(CONFIG.recipient); }
 });
 
+async function bootstrapFromBackend() {
+  if (!window.Backend) return false;
+  try {
+    const lots = await window.Backend.lots();
+    if (!Array.isArray(lots) || !lots.length) return false;
+    LOTS.length = 0;
+    for (const raw of lots) {
+      const s = sanitizeLot(raw);
+      if (!s) continue;
+      if (raw._trust) s._trust = sanitizeTrust(raw._trust);
+      s.mine = false;
+      LOTS.push(s);
+    }
+    // merge local pending drafts (not yet approved on server)
+    try {
+      const custom = JSON.parse(localStorage.getItem('capiton_lots') || '[]');
+      if (Array.isArray(custom)) for (const c of custom) {
+        const s = sanitizeLot(c);
+        if (s && !LOTS.some(l => l.id === s.id)) LOTS.push(s);
+      }
+    } catch (_) {}
+    log('lots loaded from API: ' + LOTS.length);
+    return true;
+  } catch (e) { log('API offline, local LOTS fallback: ' + e.message); return false; }
+}
+
 renderLots();
 selectLot('lot1');
+bootstrapFromBackend().then((ok) => {
+  if (!ok) return;
+  renderLots();
+  if (!LOTS.some(l => selectedLot && l.id === selectedLot.id)) selectLot(LOTS[0]?.id);
+  else { renderLots(); renderTrust(); }
+  if (isAdmin()) renderAdmin();
+});
 
 (function particles() {
   const c = $('#stars');
