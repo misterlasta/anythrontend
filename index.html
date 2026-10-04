@@ -31,6 +31,7 @@
       </div>
       <div class="nav-right">
         <button id="themeToggle" class="theme-btn" aria-label="Сменить тему">🌙</button>
+        <button id="openAdmin" class="theme-btn" aria-label="Админ-панель" title="Админ-панель">🛠</button>
         <div id="ton-connect"></div>
       </div>
     </nav>
@@ -57,7 +58,9 @@
       <div id="lotsGrid" class="lots-grid"></div>
       <aside class="card checkout">
         <h2 id="lotTitle">Выбери лот</h2>
+        <div id="lotMeta" class="lot-meta"></div>
         <p id="lotDesc">Кликни по карточке — здесь появится описание, цена и кнопка покупки.</p>
+        <div id="aiVerdict" class="ai-verdict" hidden></div>
         <div class="price-row">
           <div><div style="color:var(--theme-surface-on-surface-variant);font-size:13px">Цена</div><b id="lotPrice">—</b></div>
           <button id="copyAddr" class="btn btn-secondary btn-sm">Копировать адрес</button>
@@ -65,17 +68,20 @@
         <div class="addr" id="addrLine">получатель: настраивается в app.js</div>
         <button id="investBtn" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:16px">Купить лот</button>
         <div id="status" class="status">Подключи кошелёк сверху, выбери лот</div>
+        <div id="trustBox" class="trust"></div>
         <div id="log" class="log"><div><span class="t">[init]</span> ожидание TON Connect...</div></div>
       </aside>
     </section>
 
     <section id="features" class="section">
-      <div class="eyebrow">// как работает</div>
-      <h2 class="h2">Коротко</h2>
+      <div class="eyebrow">// защита RWA</div>
+      <h2 class="h2">Украсть не получится</h2>
+      <p class="lead">Проблема оракула не решается кодом полностью, но архитектура делает кражу технически невыгодной.</p>
       <div class="features">
-        <div class="feat"><h3>Выбирай лот</h3><p>Карточки как на NFT-маркете: цена и описание сразу видны.</p></div>
-        <div class="feat"><h3>Оплачивай в TON</h3><p>TonConnect + Telegram MainButton. Всё ончейн.</p></div>
-        <div class="feat"><h3>TON Grant</h3><p>Готовимся под грант TON: TWA, TonConnect, мобильный UX.</p></div>
+        <div class="feat"><h3>1 · Транши и эскроу</h3><p>Деньги в сейфе контракта. Этапы 20/30/50%. Пропал после первого этапа — остальное возвращается инвесторам.</p></div>
+        <div class="feat"><h3>2 · Голосование DAO</h3><p>Следующий транш открывают сами держатели долей: видеоотчёт → кнопка «За» → нужно &gt;51%.</p></div>
+        <div class="feat"><h3>3 · Мультисиг 2/3</h3><p>Ключи: предприниматель, платформа, аудитор. Без второй подписи деньги не уходят. Подтверждение — в админке.</p></div>
+        <div class="feat"><h3>4 · Оплата подрядчикам</h3><p>Предприниматель не касается денег: принёс счёт — платформа оплатила поставщику напрямую.</p></div>
       </div>
     </section>
 
@@ -86,6 +92,8 @@
         <div class="faq-item"><button class="faq-q">Как купить? <span>+</span></button><div class="faq-a"><div>Подключи кошелёк и нажми «Купить» на карточке.</div></div></div>
         <div class="faq-item"><button class="faq-q">Куда идут TON? <span>+</span></button><div class="faq-a"><div>На адрес из CONFIG.recipient. Проверяй в tonviewer.com.</div></div></div>
         <div class="faq-item"><button class="faq-q">При чём тут грант? <span>+</span></button><div class="faq-a"><div>Демо для заявки на TON Grant: мини-приложение с реальными транзакциями.</div></div></div>
+        <div class="faq-item"><button class="faq-q">А если предприниматель пропадёт? <span>+</span></button><div class="faq-a"><div>В сейфе останутся невыданные транши — они возвращаются инвесторам, предприниматель их не трогал.</div></div></div>
+        <div class="faq-item"><button class="faq-q">Кто подтверждает траты? <span>+</span></button><div class="faq-a"><div>2 подписи из 3: предприниматель + платформа или аудитор. Плюс голосование держателей &gt;51%.</div></div></div>
       </div>
     </section>
 
@@ -95,17 +103,43 @@
     </footer>
     <div class="mainbutton-spacer"></div>
     <div id="sellModal" class="modal" hidden>
-      <div class="modal-card">
-        <h3>Новый лот</h3>
-        <input id="sellTitle" placeholder="Название, например: Доля в кофейне">
-        <textarea id="sellDesc" placeholder="Короткое описание"></textarea>
+      <div class="modal-card modal-wide">
+        <h3>Панель предпринимателя — новый лот</h3>
+        <input id="sellTitle" placeholder="Название проекта">
         <div class="modal-row">
-          <input id="sellPrice" type="number" min="0.01" step="0.01" placeholder="Цена в TON">
-          <input id="sellTag" placeholder="Тег">
+          <input id="sellLogo" placeholder="Логотип: ссылка на картинку или 1-2 буквы">
+          <input id="sellLoc" placeholder="Локация, например: Москва / онлайн">
+        </div>
+        <textarea id="sellDesc" placeholder="Идея / описание: что за проект, куда пойдут средства"></textarea>
+        <div class="modal-row">
+          <select id="sellStage">
+            <option value="idea">Стадия: идея</option>
+            <option value="live">Стадия: уже существует</option>
+          </select>
+          <select id="sellFormat">
+            <option value="online">Онлайн</option>
+            <option value="offline">Офлайн</option>
+            <option value="hybrid">Онлайн + офлайн</option>
+          </select>
         </div>
         <div class="modal-row">
+          <input id="sellGoal" type="number" min="0.1" step="0.1" placeholder="Нужно всего, TON">
+          <input id="sellPrice" type="number" min="0.01" step="0.01" placeholder="Цена 1 акции, TON">
+        </div>
+        <div id="aiPreview" class="ai-verdict" hidden></div>
+        <div class="modal-row">
           <button id="sellCancel" class="btn btn-secondary btn-sm">Отмена</button>
-          <button id="sellSubmit" class="btn btn-primary btn-sm">Опубликовать</button>
+          <button id="sellSubmit" class="btn btn-primary btn-sm">Отправить на модерацию</button>
+        </div>
+      </div>
+    </div>
+    <div id="adminModal" class="modal" hidden>
+      <div class="modal-card modal-wide">
+        <h3>Панель админа <span class="admin-ai">+ AI-модер</span></h3>
+        <p class="admin-hint">Нейронка пред-проверяет каждый лот: скоринг, стоп-слова, адекватность цены. Ты только жмёшь галочку.</p>
+        <div id="adminList" class="admin-list"></div>
+        <div class="modal-row">
+          <button id="adminClose" class="btn btn-secondary btn-sm">Закрыть</button>
         </div>
       </div>
     </div>
