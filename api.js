@@ -61,5 +61,20 @@
       req(`/api/admin/multisig/${id}/${role}`, { method: "POST", headers: headers() }),
     payInvoice: (id) =>
       req(`/api/admin/invoices/${id}/pay`, { method: "POST", headers: headers() }),
+    proposeInvoice: (id) =>
+      req(`/api/admin/invoices/${id}/propose`, { method: "POST", headers: headers() }),
+    veto: (invoice_id) =>
+      req("/api/veto", { method: "POST", headers: headers(true), body: JSON.stringify({ invoice_id }) }),
+    market: (lot_id) => req("/api/market" + (lot_id ? "?lot_id=" + encodeURIComponent(lot_id) : "")),
+    sellShare: (lot_id, price_nano) =>
+      req("/api/market", { method: "POST", headers: headers(true), body: JSON.stringify({ lot_id, price_nano }) }),
+    buyShare: (id) => req(`/api/market/${id}/buy`, { method: "POST", headers: headers() }),
+    portfolio: () => req("/api/portfolio", { headers: headers() }),
+    auditReport: (lot_id, text, photo, approved_release) =>
+      req("/api/auditor/reports", {
+        method: "POST",
+        headers: headers(true),
+        body: JSON.stringify({ lot_id, text, photo, approved_release }),
+      }),
   };
 })();

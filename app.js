@@ -687,8 +687,9 @@ function renderTrust() {
     </div>
     <div class="trust-head">Оплата подрядчикам напрямую</div>
     ${t.invoices.map(inv => `<div class="ms-item"><b>${esc(inv.title)} · ${esc(inv.amount)}</b>
-      <div class="ms-sub">${inv.paid ? 'оплачено со счёта платформы' : 'ждёт разблокированного транша + 2 подписей'}</div>
-      ${inv.paid ? '' : `<button class="abtn ok" data-pay="${esc(selectedLot.id)}:${esc(inv.id)}">Оплатить счёт</button>`}
+      <div class="ms-sub">${inv.paid ? 'оплачено со счёта платформы' : inv.vetoed ? 'заморожено вето инвесторов' : 'ждёт разблокированного транша + 2 подписей'}</div>
+      ${inv.paid ? '' : `<button class="abtn ok" data-pay="${esc(selectedLot.id)}:${esc(inv.id)}">Оплатить счёт</button>
+      <button class="abtn no" data-veto="${esc(inv.id)}">Наложить вето</button>`}
     </div>`).join('')}`;
 }
 async function onInvest(forcedId) {
@@ -817,6 +818,12 @@ document.addEventListener('click', async (e) => {
   if (ms) { const [role, id] = ms.dataset.ms.split(':'); msApprove(id, role); return; }
   const pay = e.target.closest?.('[data-pay]');
   if (pay) { const [id, inv] = pay.dataset.pay.split(':'); payInvoice(id, inv); return; }
+  const veto = e.target.closest?.('[data-veto]');
+  if (veto) {
+    try { const r = await window.Backend?.veto(veto.dataset.veto); toast(r?.vetoed ? 'Выплата заморожена вето' : 'Вето учтено', r?.vetoed ? 'success' : undefined); }
+    catch (err) { toast('Вето: ' + err.message, 'error'); }
+    return;
+  }
   const buy = e.target.closest?.('[data-buy]');
   if (buy) { e.stopPropagation(); onInvest(buy.dataset.buy); return; }
   const card = e.target.closest?.('.lot');
