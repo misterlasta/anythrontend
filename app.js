@@ -1003,9 +1003,18 @@ document.querySelector('#themeToggle')?.addEventListener('click', () => {
 });
 initTelegram();
 if (!inTG) {
-  const gate = $('#tgOnly');
-  if (gate) gate.hidden = false;
-  document.body.classList.add('locked');
+  if (!tg) {
+    // Desktop browser without Telegram: dev-preview, don't block the UI.
+    // Real restriction (TG WebView without initData) still shows the gate below.
+    const gate = $('#tgOnly');
+    if (gate) gate.hidden = true;
+    document.body.classList.remove('locked');
+    log('dev-preview в браузере: заглушка скрыта');
+  } else {
+    const gate = $('#tgOnly');
+    if (gate) gate.hidden = false;
+    document.body.classList.add('locked');
+  }
 }
 refreshAdminVisibility();
 syncMainButton();
