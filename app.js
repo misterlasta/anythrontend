@@ -255,6 +255,7 @@ const EN = {
   'Поиск лота...': 'Search lots...',
   'Нужно всего, TON': 'Total needed, TON',
   'Цена 1 акции, TON': 'Price of 1 share, TON',
+  'Настройки': 'Settings',
 };
 
 function currentLang() {
@@ -283,12 +284,16 @@ function applyLang() {
   document.documentElement.lang = LANG === 'en' ? 'en' : 'ru';
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
-  const lb = $('#langBtn');
-  if (lb) lb.textContent = LANG === 'en' ? 'RU' : 'EN';
+  document.querySelectorAll('#langSeg .seg-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === LANG));
   renderFeed();
   if (document.querySelector('#view-profile.active')) renderProfile();
   if (document.querySelector('#view-portfolio.active')) renderPortfolio();
   if (selectedLot && !$('#lotModal')?.hidden) selectLot(selectedLot.id);
+}
+function wireLangSeg() {
+  document.querySelectorAll('#langSeg .seg-btn').forEach(b =>
+    b.addEventListener('click', () => { haptic('light'); setLang(b.dataset.lang); }));
 }
 
 const $ = (s) => document.querySelector(s);
@@ -414,15 +419,10 @@ function initTelegram() {
 }
 
 function syncMainButton() {
-  if (!tg?.MainButton || !inTG) return;
-  try {
-    tg.MainButton.setText(selectedLot ? (t('Купить за {p}', { p: selectedLot.price })) : t('Купить лот'));
-    tg.MainButton.show();
-    if (!tonConnectUI?.connected) tg.MainButton.disable();
-    else tg.MainButton.enable();
-  } catch (_) {}
+  // Native Telegram bottom button is disabled by design: feed cards already
+  // have their own buy buttons, and MainButton would overlap the tabbar.
+  try { tg?.MainButton?.hide(); } catch (_) {}
 }
-try { tg?.MainButton?.onClick?.(() => { haptic('medium'); onInvest(); }); } catch (_) {}
 
 let tonConnectUI = null;
 try {
@@ -1004,6 +1004,7 @@ function ratingFor(investedTon, votes, lots) {
   return { score, label };
 }
 async function renderProfile() {
+  refreshAvatar();
   const u = tgUser();
   const nameEl = $('#profileName'), nickEl = $('#profileNick');
   if (nameEl) nameEl.textContent = u ? ([u.first_name, u.last_name].filter(Boolean).join(' ') || t('Инвестор')) : t('Гость');
@@ -1451,9 +1452,10 @@ document.querySelectorAll('a[href^="#"]').forEach((a) => {
 });
 
 applyTheme('light'); // white theme only, no toggle
-$('#langBtn')?.addEventListener('click', () => { haptic('light'); setLang(LANG === 'en' ? 'ru' : 'en'); });
+wireLangSeg();
 initTelegram();
 refreshAvatar();
+setTimeout(refreshAvatar, 800); // late Telegram user data retry
 document.querySelectorAll('#tabbar .tab').forEach(t =>
   t.addEventListener('click', () => switchView(t.dataset.view)));
 $('#lotClose')?.addEventListener('click', closeLot);
